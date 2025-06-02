@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add New Product</title>    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="js/app.js"></script>
+</head>
+<body class="bg-gray-100 p-8">    <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">Add New Product</h2>
+                <a href="index.html" class="text-blue-600 hover:text-blue-800 flex items-center space-x-1">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Back to Main</span>
+                </a>
+            </div>
+            
+            <form id="productForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Product Name</label>
+                    <input type="text" id="name" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Product Type</label>
+                    <input type="text" id="type" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Priority</label>
+                    <select id="priority" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">
+                    Create Product
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Result Section -->
+    <div id="result" class="hidden max-w-md mx-auto mt-8 bg-white rounded-xl shadow-md overflow-hidden">
+        <div class="p-6">
+            <h3 class="text-lg font-semibold mb-4">Product Created!</h3>
+            <div class="space-y-2 mb-4">
+                <p>ID: <span id="productId" class="font-mono"></span></p>
+                <p>Name: <span id="productName"></span></p>
+                <p>Type: <span id="productType"></span></p>
+            </div>
+            
+            <div id="qrcode" class="flex justify-center mb-4"></div>
+            
+            <button onclick="downloadQR()" class="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600">
+                Download QR Code
+            </button>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('productForm').onsubmit = function(e) {
+            e.preventDefault();
+            
+            // Clear any existing QR code
+            const qrcodeDiv = document.getElementById('qrcode');
+            qrcodeDiv.innerHTML = '';
+              try {
+                // Create product
+                const product = window.addProduct(
+                    document.getElementById('name').value,
+                    document.getElementById('type').value,
+                    document.getElementById('priority').value
+                );
+                
+                // Display product info
+                document.getElementById('productId').textContent = product.id;
+                document.getElementById('productName').textContent = product.name;
+                document.getElementById('productType').textContent = product.type;
+                
+                // Generate QR code
+                new QRCode(qrcodeDiv, {
+                    text: product.id,
+                    width: 128,
+                    height: 128
+                });
+                
+                // Show result section
+                document.getElementById('result').classList.remove('hidden');
+                
+                // Clear form
+                e.target.reset();
+                
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        };
+
+        function downloadQR() {
+            const canvas = document.querySelector('#qrcode canvas');
+            if (!canvas) return;
+            
+            const link = document.createElement('a');
+            link.download = 'product-qr.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>

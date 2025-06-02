@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factory Production Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="js/app.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #1e3a8a 0%, #0ea5e9 100%);
+        }
+        .status-pending {
+            background-color: #f59e0b;
+        }
+        .status-in-progress {
+            background-color: #3b82f6;
+        }
+        .status-completed {
+            background-color: #10b981;
+        }
+        .status-delayed {
+            background-color: #ef4444;
+        }
+        .scanner-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        .scanner-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            pointer-events: none;
+        }
+        .scanner-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 70%;
+            border: 3px solid rgba(255, 255, 255, 0.7);
+            border-radius: 8px;
+            box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+        }
+        .timeline-item:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 16px;
+            top: 24px;
+            height: calc(100% - 24px);
+            width: 2px;
+            background-color: #e5e7eb;
+        }
+        @media (max-width: 640px) {
+            .scanner-frame {
+                width: 80%;
+                height: 80%;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-industry text-3xl"></i>
+                    <h1 class="text-2xl font-bold">Factory Production Tracker</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="add-product.html" class="bg-white text-blue-600 px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-50">
+                        <i class="fas fa-plus"></i>
+                        <span>New Product</span>
+                    </a>
+                    <div class="hidden md:flex items-center space-x-4">
+                        <span class="text-sm font-medium">Welcome, Manager</span>
+                        <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-600">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Scanner Section -->
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">QR Code Scanner</h2>
+                    <p class="text-gray-600 mb-6">Scan the QR code on the production item to track its status and progress.</p>
+                    
+                    <div class="scanner-container mb-6">
+                        <video id="scanner-video" width="100%" height="auto" playsinline></video>
+                        <div class="scanner-overlay"></div>
+                        <div class="scanner-frame"></div>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <button id="start-scan" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors">
+                            <i class="fas fa-qrcode"></i>
+                            <span>Start Scanning</span>
+                        </button>
+                        <button id="stop-scan" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors">
+                            <i class="fas fa-stop"></i>
+                            <span>Stop</span>
+                        </button>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <label for="manual-input" class="block text-sm font-medium text-gray-700 mb-2">Or enter production ID manually</label>
+                        <div class="flex">
+                            <input type="text" id="manual-input" placeholder="Enter production ID" class="flex-1 border border-gray-300 rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button id="manual-submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-r-lg transition-colors">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Stats Section -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-6">Production Overview</h2>
+                    
+                    <div class="space-y-6">
+                        <div class="bg-blue-50 p-4 rounded-lg hover:bg-blue-100 cursor-pointer transition-colors" onclick="displayProducts(ProductManager.products)">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm text-gray-600">Total Items</p>                                <p class="text-2xl font-bold text-blue-600" data-stat="total">0</p>
+                            </div>
+                            <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                <i class="fas fa-boxes text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-green-50 p-4 rounded-lg hover:bg-green-100 cursor-pointer transition-colors" onclick="displayProducts(getProductsByStatus('Completed'))">
+                            <p class="text-sm text-gray-600">Completed</p>
+                            <p class="text-xl font-bold text-green-600" data-stat="completed">0</p>
+                        </div>
+                        <div class="bg-blue-50 p-4 rounded-lg hover:bg-blue-100 cursor-pointer transition-colors" onclick="displayProducts(getProductsByStatus('In Progress'))">
+                            <p class="text-sm text-gray-600">In Progress</p>
+                            <p class="text-xl font-bold text-blue-600" data-stat="in-progress">0</p>
+                        </div>
+                        <div class="bg-yellow-50 p-4 rounded-lg hover:bg-yellow-100 cursor-pointer transition-colors" onclick="displayProducts(getProductsByStatus('Pending'))">
+                            <p class="text-sm text-gray-600">Pending</p>
+                            <p class="text-xl font-bold text-yellow-600" data-stat="pending">0</p>
+                        </div>
+                        <div class="bg-red-50 p-4 rounded-lg hover:bg-red-100 cursor-pointer transition-colors" onclick="displayProducts(getProductsByStatus('Delayed'))">
+                            <p class="text-sm text-gray-600">Delayed</p>
+                            <p class="text-xl font-bold text-red-600" data-stat="delayed">0</p>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="font-medium text-gray-700 mb-3">Today's Target</h3>
+                        <div class="w-full bg-gray-200 rounded-full h-4">
+                            <div class="progress-bar bg-blue-600 h-4 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between mt-2 text-sm text-gray-600">
+                            <span class="progress-text">0% Complete</span>
+                            <span class="progress-count">0/200 items</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Products List Section -->
+        <div id="products-list-section" class="hidden mt-8 bg-white rounded-xl shadow-md overflow-hidden">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">Products List</h2>
+                    <button onclick="closeProductsList()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table id="productsTable" class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section (Hidden by default) -->
+        <div id="results-section" class="hidden mt-8 bg-white rounded-xl shadow-md overflow-hidden">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">Production Details</h2>
+                    <button id="close-results" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-600">Product ID</p>
+                        <p id="product-id" class="text-lg font-medium text-gray-800">PRD-2023-00456</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-600">Current Status</p>
+                        <p id="product-status" class="text-lg font-medium">
+                            <span class="px-3 py-1 rounded-full text-sm text-white status-in-progress">In Progress</span>
+                        </p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-600">Estimated Completion</p>
+                        <p id="product-completion" class="text-lg font-medium text-gray-800">May 15, 2023</p>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <h3 class="font-medium text-gray-700 mb-4">Product Information</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-600">Product Name</p>
+                            <p id="product-name" class="font-medium">Industrial Bearing Unit</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Product Type</p>
+                            <p id="product-type" class="font-medium">BX-500 Series</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Order Date</p>
+                            <p id="order-date" class="font-medium">April 10, 2023</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Priority</p>
+                            <p id="product-priority" class="font-medium">High</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="font-medium text-gray-700 mb-4">Production Timeline</h3>
+                    <div class="space-y-6">
+                        <div class="relative timeline-item pl-8">
+                            <div class="absolute left-0 top-0 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                                <i class="fas fa-check"></i>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-medium">Material Preparation</p>
+                                        <p class="text-sm text-gray-600">Completed by John D.</p>
+                                    </div>
+                                    <span class="text-sm text-gray-500">Apr 12, 2023</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="relative timeline-item pl-8">
+                            <div class="absolute left-0 top-0 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                                <i class="fas fa-check"></i>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-medium">Component Assembly</p>
+                                        <p class="text-sm text-gray-600">Completed by Sarah M.</p>
+                                    </div>
+                                    <span class="text-sm text-gray-500">Apr 18, 2023</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="relative timeline-item pl-8">
+                            <div class="absolute left-0 top-0 w-8 h-8 rounded-full bg-blue-100 border-2 border-blue-600 flex items-center justify-center text-blue-600">
+                                <i class="fas fa-cog fa-spin"></i>
+                            </div>
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-medium">Quality Testing</p>
+                                        <p class="text-sm text-gray-600">In progress (Michael R.)</p>
+                                    </div>
+                                    <span class="text-sm text-gray-500">Expected: May 10, 2023</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="relative timeline-item pl-8">
+                            <div class="absolute left-0 top-0 w-8 h-8 rounded-full bg-gray-100 border-2 border-gray-300 flex items-center justify-center text-gray-400">
+                                <i class="far fa-clock"></i>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg opacity-70">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-medium">Packaging</p>
+                                        <p class="text-sm text-gray-600">Pending</p>
+                                    </div>
+                                    <span class="text-sm text-gray-500">Scheduled: May 12, 2023</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="relative timeline-item pl-8">
+                            <div class="absolute left-0 top-0 w-8 h-8 rounded-full bg-gray-100 border-2 border-gray-300 flex items-center justify-center text-gray-400">
+                                <i class="far fa-clock"></i>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg opacity-70">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-medium">Shipping</p>
+                                        <p class="text-sm text-gray-600">Pending</p>
+                                    </div>
+                                    <span class="text-sm text-gray-500">Scheduled: May 15, 2023</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-8 flex flex-col sm:flex-row gap-4">
+                    <button id="update-status-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors">
+                        <i class="fas fa-edit"></i>
+                        <span>Update Status</span>
+                    </button>
+                    <button class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors">
+                        <i class="fas fa-print"></i>
+                        <span>Print Report</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const video = document.getElementById('scanner-video');
+            const startScanBtn = document.getElementById('start-scan');
+            const stopScanBtn = document.getElementById('stop-scan');
+            const manualInput = document.getElementById('manual-input');
+            const manualSubmit = document.getElementById('manual-submit');
+            const resultsSection = document.getElementById('results-section');
+            const closeResults = document.getElementById('close-results');
+            
+            let scanning = false;
+            let stream = null;
+            
+            // Start scanning
+            startScanBtn.addEventListener('click', async function() {
+                try {
+                    // Request camera with optimal settings for QR scanning
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: { ideal: "environment" },
+                            width: { min: 640, ideal: 1280, max: 1920 },
+                            height: { min: 480, ideal: 720, max: 1080 },
+                            aspectRatio: { ideal: 1.777777778 },
+                            frameRate: { ideal: 30 },
+                            brightness: { ideal: 128 },
+                            contrast: { ideal: 128 }
+                        }
+                    });
+                    
+                    video.srcObject = stream;
+                    video.setAttribute('playsinline', true); // Required for iOS
+
+                    // Track video load state
+                    const videoReady = new Promise((resolve) => {
+                        video.onloadedmetadata = () => {
+                            video.play().then(resolve);
+                        };
+                    });
+
+                    await videoReady;
+
+                    scanning = true;
+                    startScanBtn.disabled = true;
+                    stopScanBtn.disabled = false;
+                    scanQRCode();
+                } catch (err) {
+                    console.error("Error accessing camera:", err);
+                    let errorMessage = "Could not access the camera. ";
+                    if (err.name === "NotAllowedError") {
+                        errorMessage += "Please ensure you have granted camera permissions.";
+                    } else if (err.name === "NotFoundError") {
+                        errorMessage += "No camera found on your device.";
+                    } else if (err.name === "NotReadableError") {
+                        errorMessage += "Camera is already in use by another application.";
+                    } else {
+                        errorMessage += "Please check your camera settings and try again.";
+                    }
+                    alert(errorMessage);
+                }
+            });
+            
+            // Stop scanning
+            stopScanBtn.addEventListener('click', function() {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    video.srcObject = null;
+                }
+                scanning = false;
+                startScanBtn.disabled = false;
+                stopScanBtn.disabled = true;
+            });
+            
+            // Manual submit
+            manualSubmit.addEventListener('click', function() {
+                if (manualInput.value.trim() !== '') {
+                    showProductDetails(sampleProduct);
+                } else {
+                    alert('Please enter a production ID');
+                }
+            });
+             // Close results
+            closeResults.addEventListener('click', function() {
+                resultsSection.classList.add('hidden');
+                // Show the products list again if it was visible before
+                document.getElementById('products-list-section').classList.remove('hidden');
+                
+                // Update all stats, including the title and progress bar
+                updateStats();
+            });
+
+            // QR code scanning function
+            function scanQRCode() {
+                // Check for proper video initialization
+                if (!scanning || !video.readyState === video.HAVE_ENOUGH_DATA) {
+                    if (scanning) {
+                        requestAnimationFrame(scanQRCode);
+                    }
+                    return;
+                }
+
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                
+                // Set canvas size to match video dimensions
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                try {
+                    // Draw current video frame to canvas
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Get image data
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    
+                    // Try multiple inversion attempts for better QR detection
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "attemptBoth",
+                    });
+                    
+                    if (code) {
+                        console.log("Found QR code:", code.data);
+                        stopScanBtn.click();
+                        const product = window.getProduct(code.data);
+                        if (product) {
+                            window.showProductDetails(product);
+                        } else {
+                            alert('Product not found!');
+                        }
+                    }
+                } catch (error) {
+                    console.error('QR scanning error:', error);
+                    // Only show error to user if it's not a typical frame processing error
+                    if (error.name !== "NS_ERROR_NOT_AVAILABLE") {
+                        alert('Error scanning QR code. Please try again.');
+                    }
+                }
+                
+                // Continue scanning
+                if (scanning) {
+                    requestAnimationFrame(scanQRCode);
+                }
+            }
+            
+            // Display product details
+            window.showProductDetails = function(product) {
+                document.getElementById('product-id').textContent = product.id;
+                document.getElementById('product-name').textContent = product.name;
+                document.getElementById('product-type').textContent = product.type;
+                document.getElementById('product-status').innerHTML = 
+                    `<span class="px-3 py-1 rounded-full text-sm text-white status-${product.status.toLowerCase().replace(' ', '-')}">${product.status}</span>`;
+                document.getElementById('product-completion').textContent = product.completion;
+                document.getElementById('order-date').textContent = product.orderDate;
+                document.getElementById('product-priority').textContent = product.priority;
+
+                // Update timeline - make sure we only target the timeline in the results section
+                const timelineContainer = document.querySelector('#results-section .space-y-6');
+                timelineContainer.innerHTML = '';
+
+                product.timeline.forEach((item, index) => {
+                    const isCompleted = item.status === 'Completed';
+                    const isLast = index === product.timeline.length - 1;
+                    
+                    const timelineItem = `
+                        <div class="relative timeline-item pl-8">
+                            <div class="absolute left-0 top-0 w-8 h-8 rounded-full ${isCompleted ? 'bg-blue-600' : 'bg-gray-100 border-2 border-gray-300'} flex items-center justify-center ${isCompleted ? 'text-white' : 'text-gray-400'}">
+                                <i class="fas ${isCompleted ? 'fa-check' : 'fa-clock'}"></i>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg ${!isCompleted ? 'opacity-70' : ''}">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-medium">${item.stage}</p>
+                                        <p class="text-sm text-gray-600">${isCompleted ? `Completed by ${item.assignee}` : 'Pending'}</p>
+                                    </div>
+                                    <span class="text-sm text-gray-500">${item.date}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    timelineContainer.innerHTML += timelineItem;
+                });
+                
+                resultsSection.classList.remove('hidden');
+                setTimeout(() => {
+                    resultsSection.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+
+                // Setup status update button
+                const updateStatusBtn = document.querySelector('#update-status-btn');
+                updateStatusBtn.onclick = () => showStatusUpdateModal(product);
+            }
+
+            // Handle manual input
+            manualSubmit.addEventListener('click', function() {
+                const id = manualInput.value.trim();
+                if (id !== '') {
+                    const products = searchProducts(id);
+                    if (products.length > 0) {
+                        if (products.length === 1) {
+                            showProductDetails(products[0]);
+                        } else {
+                            displayProducts(products);
+                        }
+                    } else {
+                        alert('No products found matching this ID!');
+                    }
+                } else {
+                    alert('Please enter a production ID');
+                }
+            });
+
+            // Status update modal
+            function showStatusUpdateModal(product) {
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-xl max-w-md w-full p-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4">Update Status</h3>
+                        <form id="status-update-form">
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">New Status</label>
+                                <select id="new-status" class="w-full border border-gray-300 rounded-lg px-4 py-2">
+                                    <option value="Pending">Pending</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Delayed">Delayed</option>
+                                </select>
+                            </div>
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Assignee</label>
+                                <input type="text" id="assignee" required
+                                    class="w-full border border-gray-300 rounded-lg px-4 py-2">
+                            </div>
+                            <div class="flex space-x-4">
+                                <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg">Update</button>
+                                <button type="button" id="cancel-update" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-lg">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+
+                document.body.appendChild(modal);
+
+                const form = modal.querySelector('#status-update-form');
+                const cancelBtn = modal.querySelector('#cancel-update');
+
+                form.onsubmit = (e) => {
+                    e.preventDefault();
+                    const newStatus = document.getElementById('new-status').value;
+                    const assignee = document.getElementById('assignee').value;
+                    
+                    const updatedProduct = updateProductStatus(product.id, newStatus, assignee);
+                    showProductDetails(updatedProduct);
+                    updateStats();
+                    modal.remove();
+                };
+
+                cancelBtn.onclick = () => modal.remove();
+            }
+
+            // Function to display products in the table
+            window.displayProducts = function(products) {
+                const productsListSection = document.getElementById('products-list-section');
+                const tableBody = document.querySelector('#productsTable tbody');
+                if (!tableBody) return;
+                
+                tableBody.innerHTML = '';
+                products.forEach(product => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50';
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${product.id}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${product.name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${product.type}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full status-${product.status.toLowerCase().replace(' ', '-')} text-white">
+                                ${product.status}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${product.priority}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${product.orderDate}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button onclick="viewProductDetails('${product.id}')" class="text-blue-600 hover:text-blue-900">
+                                View Details
+                            </button>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+                // Hide results section if it's visible
+                document.getElementById('results-section').classList.add('hidden');
+                // Show products list section
+                productsListSection.classList.remove('hidden');
+                // Scroll to the products list
+                productsListSection.scrollIntoView({ behavior: 'smooth' });
+            };
+
+            // Function to close products list
+            window.closeProductsList = function() {
+                document.getElementById('products-list-section').classList.add('hidden');
+            };
+
+            // Function to view product details from ID
+            window.viewProductDetails = function(productId) {
+                const product = getProduct(productId);
+                if (product) {
+                    // Hide the products list
+                    document.getElementById('products-list-section').classList.add('hidden');
+                    // Show the product details
+                    showProductDetails(product);
+                }
+            };
+
+            // Initialize stats
+            updateStats();
+        });
+    </script>
+</body>
+</html>
