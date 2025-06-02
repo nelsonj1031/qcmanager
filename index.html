@@ -6,6 +6,8 @@
     <title>Factory Production Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <script src="js/app.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -348,7 +350,7 @@
                         <i class="fas fa-edit"></i>
                         <span>Update Status</span>
                     </button>
-                    <button class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors">
+                    <button onclick="generatePDF()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 px-6 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors">
                         <i class="fas fa-print"></i>
                         <span>Print Report</span>
                     </button>
@@ -358,6 +360,82 @@
     </div>
 
     <script>
+        // PDF Generation Function
+        function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Get the product details
+            const productId = document.getElementById('product-id').textContent;
+            const productName = document.getElementById('product-name').textContent;
+            const productType = document.getElementById('product-type').textContent;
+            const productStatus = document.querySelector('#product-status span').textContent;
+            const productCompletion = document.getElementById('product-completion').textContent;
+            const orderDate = document.getElementById('order-date').textContent;
+            const priority = document.getElementById('product-priority').textContent;
+
+            // Add header
+            doc.setFontSize(20);
+            doc.setTextColor(0, 51, 153);
+            doc.text('Product Details Report', 15, 20);
+            doc.setLineWidth(0.5);
+            doc.line(15, 25, 195, 25);
+
+            // Add product information
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0);
+            
+            const info = [
+                ['Product ID:', productId],
+                ['Name:', productName],
+                ['Type:', productType],
+                ['Status:', productStatus],
+                ['Priority:', priority],
+                ['Order Date:', orderDate],
+                ['Est. Completion:', productCompletion]
+            ];
+
+            doc.autoTable({
+                startY: 35,
+                head: [['Field', 'Value']],
+                body: info,
+                theme: 'grid',
+                headStyles: { fillColor: [0, 51, 153] },
+                styles: { fontSize: 10 }
+            });
+
+            // Add Timeline section
+            const timelineY = doc.lastAutoTable.finalY + 20;
+            doc.setFontSize(14);
+            doc.text('Production Timeline', 15, timelineY);
+
+            // Get timeline items
+            const timelineItems = Array.from(document.querySelectorAll('.timeline-item')).map(item => {
+                const stage = item.querySelector('.font-medium').textContent;
+                const status = item.querySelector('.text-sm.text-gray-600').textContent;
+                const date = item.querySelector('.text-sm.text-gray-500').textContent;
+                return [stage, status, date];
+            });
+
+            doc.autoTable({
+                startY: timelineY + 10,
+                head: [['Stage', 'Status', 'Date']],
+                body: timelineItems,
+                theme: 'grid',
+                headStyles: { fillColor: [0, 51, 153] },
+                styles: { fontSize: 10 }
+            });
+
+            // Add footer
+            const pageWidth = doc.internal.pageSize.width;
+            doc.setFontSize(10);
+            doc.setTextColor(128, 128, 128);
+            const reportDate = new Date().toLocaleString();
+            doc.text('Report generated: ' + reportDate, pageWidth - 15, doc.internal.pageSize.height - 10, { align: 'right' });
+
+            // Save the PDF
+            doc.save('product-report-' + productId + '.pdf');
+        }
         document.addEventListener('DOMContentLoaded', function() {
             const video = document.getElementById('scanner-video');
             const startScanBtn = document.getElementById('start-scan');
